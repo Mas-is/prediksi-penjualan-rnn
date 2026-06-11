@@ -130,7 +130,7 @@ model, scaler, metadata, metrics = load_saved_model()
 if uploaded_file:
     raw_df = pd.read_csv(uploaded_file)
 else:
-    raw_df = pd.read_csv("retail_sales.csv")
+    raw_df = pd.read_csv("retail_sales_dataset.csv")
 daily = prepare_daily_data(raw_df)
 
 if len(daily) < 30:
