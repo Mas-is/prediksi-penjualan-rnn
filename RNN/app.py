@@ -87,6 +87,36 @@ def format_rupiah(x):
     return f"Rp {format_angka(x)}"
 
 
+def read_csv_safely(file):
+    """
+    Membaca CSV dari upload Streamlit atau file lokal.
+    Fungsi ini mencoba beberapa encoding agar file CSV dari Kaggle/Excel tidak error UnicodeDecodeError.
+    """
+    encodings = ["utf-8", "utf-8-sig", "latin1", "ISO-8859-1", "cp1252"]
+    last_error = None
+
+    for enc in encodings:
+        try:
+            if hasattr(file, "seek"):
+                file.seek(0)
+
+            return pd.read_csv(
+                file,
+                encoding=enc,
+                sep=None,
+                engine="python",
+                on_bad_lines="skip"
+            )
+
+        except Exception as e:
+            last_error = e
+
+    st.error("File CSV gagal dibaca.")
+    st.write("Kemungkinan penyebab: encoding file tidak cocok, delimiter tidak terbaca, atau format CSV rusak.")
+    st.code(str(last_error))
+    st.stop()
+
+
 @st.cache_resource
 def load_saved_model():
     model_path = BASE_DIR / "model_rnn_sales.keras"
@@ -243,7 +273,7 @@ st.sidebar.info("File harus memiliki kolom tanggal dan penjualan.")
 model, scaler, metadata, metrics = load_saved_model()
 
 if uploaded_file:
-    raw_df = pd.read_csv(uploaded_file)
+    raw_df = read_csv_safely(uploaded_file)
 else:
     dataset_path = BASE_DIR / "retail_sales_dataset.csv"
 
@@ -252,7 +282,7 @@ else:
         st.code("retail_sales_dataset.csv")
         st.stop()
 
-    raw_df = pd.read_csv(dataset_path)
+    raw_df = read_csv_safely(dataset_path)
 
 daily = prepare_daily_data(raw_df)
 
