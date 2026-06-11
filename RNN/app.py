@@ -3,10 +3,11 @@ import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
-from tensorflow.keras.models import load_model
 import io
 from fpdf import FPDF
 from pathlib import Path
+import zipfile
+import tempfile
 
 # =========================
 # PATH UTAMA
@@ -24,6 +25,55 @@ st.set_page_config(
 )
 
 # =========================
+# LOAD MODEL COMPATIBLE
+# =========================
+def fix_keras_batch_shape_config(obj):
+    if isinstance(obj, dict):
+        if obj.get("class_name") == "InputLayer":
+            config = obj.get("config", {})
+            if "batch_shape" in config:
+                config["batch_input_shape"] = config.pop("batch_shape")
+
+        for key, value in obj.items():
+            fix_keras_batch_shape_config(value)
+
+    elif isinstance(obj, list):
+        for item in obj:
+            fix_keras_batch_shape_config(item)
+
+    return obj
+
+
+def load_model_compatible(model_path):
+    from tensorflow.keras.models import load_model
+
+    try:
+        return load_model(model_path, compile=False)
+    except Exception as first_error:
+        error_text = str(first_error)
+
+        if "batch_shape" not in error_text:
+            raise first_error
+
+        with zipfile.ZipFile(model_path, "r") as zin:
+            with tempfile.NamedTemporaryFile(suffix=".keras", delete=False) as tmp:
+                fixed_model_path = Path(tmp.name)
+
+            with zipfile.ZipFile(fixed_model_path, "w") as zout:
+                for item in zin.infolist():
+                    data = zin.read(item.filename)
+
+                    if item.filename == "config.json":
+                        config = json.loads(data.decode("utf-8"))
+                        config = fix_keras_batch_shape_config(config)
+                        data = json.dumps(config).encode("utf-8")
+
+                    zout.writestr(item, data)
+
+        return load_model(fixed_model_path, compile=False)
+
+
+# =========================
 # FUNGSI BANTUAN
 # =========================
 def format_angka(x):
@@ -32,8 +82,10 @@ def format_angka(x):
     except:
         return "0"
 
+
 def format_rupiah(x):
     return f"Rp {format_angka(x)}"
+
 
 @st.cache_resource
 def load_saved_model():
@@ -53,7 +105,14 @@ def load_saved_model():
         st.code("\n".join(missing_files))
         st.stop()
 
-    model = load_model(model_path)
+    try:
+        model = load_model_compatible(model_path)
+    except Exception as e:
+        st.error("Model gagal dimuat.")
+        st.write("Penyebab kemungkinan: versi Keras/TensorFlow tidak cocok dengan file model.")
+        st.code(str(e))
+        st.stop()
+
     scaler = joblib.load(scaler_path)
 
     with open(metadata_path, "r", encoding="utf-8") as f:
@@ -65,25 +124,33 @@ def load_saved_model():
     else:
         metrics = metadata.get("metrics", {"mae": 0, "rmse": 0})
 
-    if "mae" not in metrics:
-        metrics["mae"] = 0
-
-    if "rmse" not in metrics:
-        metrics["rmse"] = 0
+    metrics.setdefault("mae", 0)
+    metrics.setdefault("rmse", 0)
 
     return model, scaler, metadata, metrics
 
+
 def detect_column(df, candidates):
     lower_cols = {col.lower().strip(): col for col in df.columns}
+
     for c in candidates:
         key = c.lower().strip()
         if key in lower_cols:
             return lower_cols[key]
+
     return None
 
+
 def prepare_daily_data(df):
-    date_col = detect_column(df, ["date", "tanggal", "order date", "transaction date", "invoice date"])
-    sales_col = detect_column(df, ["sales", "penjualan", "total amount", "total_amount", "revenue", "amount", "price", "quantity"])
+    date_col = detect_column(
+        df,
+        ["date", "tanggal", "order date", "transaction date", "invoice date"]
+    )
+
+    sales_col = detect_column(
+        df,
+        ["sales", "penjualan", "total amount", "total_amount", "revenue", "amount", "price", "quantity"]
+    )
 
     if date_col is None or sales_col is None:
         st.error("Kolom tanggal atau penjualan tidak ditemukan.")
@@ -104,17 +171,20 @@ def prepare_daily_data(df):
 
     return daily
 
+
 # =========================
 # GENERATE PDF
 # =========================
 def generate_pdf(df, metrics, description=""):
     pdf = FPDF()
     pdf.add_page()
+
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, txt="Prediksi Penjualan 10 Hari", ln=True, align="C")
     pdf.ln(5)
 
     pdf.set_font("Arial", "", 12)
+
     if description:
         pdf.multi_cell(0, 8, description)
         pdf.ln(5)
@@ -125,12 +195,14 @@ def generate_pdf(df, metrics, description=""):
     pdf.ln()
 
     pdf.set_font("Arial", "", 12)
+
     for _, row in df.iterrows():
         pdf.cell(50, 10, str(row["tanggal"].date()), border=1)
         pdf.cell(50, 10, format_rupiah(row["prediksi_penjualan"]), border=1)
         pdf.ln()
 
     pdf.ln(5)
+
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, "Evaluasi Model", ln=True)
 
@@ -144,6 +216,7 @@ def generate_pdf(df, metrics, description=""):
 
     return pdf_buffer
 
+
 # =========================
 # HEADER
 # =========================
@@ -154,6 +227,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+
 # =========================
 # SIDEBAR
 # =========================
@@ -161,6 +235,7 @@ st.sidebar.title("Pengaturan Data")
 uploaded_file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
 st.sidebar.markdown("---")
 st.sidebar.info("File harus memiliki kolom tanggal dan penjualan.")
+
 
 # =========================
 # LOAD MODEL & DATA
@@ -184,6 +259,7 @@ daily = prepare_daily_data(raw_df)
 if len(daily) < 30:
     st.error("Data kurang dari 30 hari. Minimal data yang dibutuhkan adalah 30 hari.")
     st.stop()
+
 
 # =========================
 # RINGKASAN DATA
@@ -209,6 +285,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+
 # =========================
 # PREDIKSI
 # =========================
@@ -222,6 +299,7 @@ prediction = scaler.inverse_transform(prediction_scaled.reshape(-1, 1)).flatten(
 prediction = np.maximum(prediction, 0)
 
 last_date = daily["tanggal"].max()
+
 future_dates = pd.date_range(
     start=last_date + pd.Timedelta(days=1),
     periods=10,
@@ -232,6 +310,7 @@ forecast_df = pd.DataFrame({
     "tanggal": future_dates,
     "prediksi_penjualan": prediction
 })
+
 
 # =========================
 # TABS
@@ -266,6 +345,7 @@ with tab3:
     st.dataframe(forecast_rp, use_container_width=True)
 
     csv_buffer = forecast_df.to_csv(index=False).encode("utf-8")
+
     st.download_button(
         "Download CSV",
         csv_buffer,
