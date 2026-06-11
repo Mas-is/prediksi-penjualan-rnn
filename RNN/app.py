@@ -368,16 +368,30 @@ with tab3:
 
 with tab4:
     st.markdown(f"""
-    <div style="padding:1rem;background:#f0f8ff;border-radius:10px;color:#1f3b64;">
-    <h3>Info Project</h3>
-    <p>Project ini menggunakan data penjualan harian untuk memprediksi 10 hari ke depan menggunakan <b>Stacked RNN</b>. Model menganalisis pola temporal dari 30 hari terakhir.</p>
-    <ul>
-        <li><b>Total Hari Data:</b> {total_hari}</li>
-        <li><b>Total Penjualan:</b> {format_rupiah(total_penjualan)}</li>
-        <li><b>Rata-rata Harian:</b> {format_rupiah(rata_rata)}</li>
-        <li><b>Penjualan Terakhir:</b> {format_rupiah(penjualan_terakhir)}</li>
-    </ul>
-    <p><b>MAE:</b> {format_rupiah(metrics.get('mae', 0))} &nbsp;&nbsp; <b>RMSE:</b> {format_rupiah(metrics.get('rmse', 0))}</p>
-    <p>Interpretasi: Nilai MAE dan RMSE menunjukkan seberapa jauh prediksi menyimpang dari data aktual. Semakin kecil nilainya, semakin akurat model.</p>
+    <div style="padding:1rem; background:#f0f8ff; border-radius:10px;">
+        <h3 style="color:#1f1f1f; margin-bottom:12px;">Info Project</h3>
+
+        <p style="color:#1f3b64; margin-bottom:10px; line-height:1.7;">
+            Project ini menggunakan data penjualan harian untuk memprediksi 10 hari ke depan
+            menggunakan <b>Stacked RNN</b>. Model menganalisis pola temporal dari 30 hari terakhir.
+        </p>
+
+        <ul style="color:#1f3b64; margin-bottom:10px; line-height:1.8;">
+            <li><b>Total Hari Data:</b> {total_hari}</li>
+            <li><b>Total Penjualan:</b> {format_rupiah(total_penjualan)}</li>
+            <li><b>Rata-rata Harian:</b> {format_rupiah(rata_rata)}</li>
+            <li><b>Penjualan Terakhir:</b> {format_rupiah(penjualan_terakhir)}</li>
+        </ul>
+
+        <p style="color:#1f3b64; margin-bottom:8px;">
+            <b>MAE:</b> {format_rupiah(metrics.get('mae', 0))} 
+            &nbsp;&nbsp; 
+            <b>RMSE:</b> {format_rupiah(metrics.get('rmse', 0))}
+        </p>
+
+        <p style="color:#1f3b64; line-height:1.7;">
+            Interpretasi: Nilai MAE dan RMSE menunjukkan seberapa jauh prediksi menyimpang dari
+            data aktual. Semakin kecil nilainya, semakin akurat model.
+        </p>
     </div>
     """, unsafe_allow_html=True)
